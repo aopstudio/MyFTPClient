@@ -26,7 +26,7 @@ public class Client {
 	PrintWriter writer;
 	String response;
 	String command;
-	String filePath="D:/FTCache";
+	String filePath="F:/";//默认工作空间是F盘
 	private static DecimalFormat df = null;
 	static {  
         // 设置数字格式，保留一位有效小数  
@@ -71,6 +71,13 @@ public class Client {
 				else {
 					continue;
 				}	
+			}
+			else if(command.startsWith("LIST")) {
+				writer.println(command);
+				writer.flush();
+				while((response=reader.readLine())!="EOF") {
+					System.out.println(response);
+				}
 			}
 			else if(command.startsWith("STOR")) {
 				writer.println(command);

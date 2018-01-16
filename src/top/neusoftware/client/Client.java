@@ -1,15 +1,21 @@
 package top.neusoftware.client;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.math.RoundingMode;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.text.DecimalFormat;
 import java.util.StringTokenizer;
 
 public class Client {
@@ -20,29 +26,32 @@ public class Client {
 	PrintWriter writer;
 	String response;
 	String command;
+	String filePath="D:/FTCache";
+	private static DecimalFormat df = null;
+	static {  
+        // 设置数字格式，保留一位有效小数  
+        df = new DecimalFormat("#0.0");  
+        df.setRoundingMode(RoundingMode.HALF_UP);  
+        df.setMinimumFractionDigits(1);  
+        df.setMaximumFractionDigits(1);  
+    }  
 	public Client() throws UnknownHostException, IOException {
-		s=new Socket("127.0.0.1",21);
+		s=new Socket("127.0.0.1",3000);
 		sin=new BufferedReader(new InputStreamReader(System.in));
 		reader=new BufferedReader(new InputStreamReader(s.getInputStream()));
 		writer=new PrintWriter(new OutputStreamWriter(s.getOutputStream()));
 	}
 	
 	public void firstAccess() throws IOException {
-		writer.println("Hello");
-		writer.flush();
+		//writer.println("Hello");
+		//writer.flush();
 		response=reader.readLine();
 		System.out.println(response);
 	}
-	public void sendCommand() throws UnknownHostException, IOException {
+	public void sendCommand() throws UnknownHostException, IOException, InterruptedException {
 		firstAccess();
 		while(!(command=sin.readLine()).equals("QUIT")){
-			if(!command.equals("PASV")) {
-				writer.println(command);
-				writer.flush();
-				response=reader.readLine();
-				System.out.println(response);
-			}
-			else {
+			if(command.equals("PASV")) {
 				writer.println(command);
 				writer.flush();
 				response=reader.readLine();
@@ -61,24 +70,133 @@ public class Client {
 				}
 				else {
 					continue;
+				}	
+			}
+			else if(command.startsWith("STOR")) {
+				writer.println(command);
+				writer.flush();
+				response=reader.readLine();
+				System.out.println(response);
+				if(response.startsWith("150")) {
+					sendFile(command.substring(5));
 				}
+			}
+			else if(command.startsWith("RETR")) {
+				writer.println(command);
+				writer.flush();
+				response=reader.readLine();
+				System.out.println(response);
+				if(response.startsWith("150")) {
+					receiveFile();
+				}
+			}
+			else {
+				writer.println(command);
+				writer.flush();
+				response=reader.readLine();
+				System.out.println(response);					
 			}
 		}
 		writer.println(command);
 		writer.flush();
 	}
-	public void getFile() throws UnsupportedEncodingException, IOException {
-		DataInputStream dis = new DataInputStream(dataSocket.getInputStream());
-		String s = "";
-		while ((s = dis.readLine()) != null) {
-		String l = new String(s.getBytes("ISO-8859-1"), "utf-8");
-		System.out.println(l);
-		}
-	}
-	public void sendFile() {
-		FileInputStream fis = null;
+	public void sendFile(String fileName) throws IOException {
 		
+		DataOutputStream dos=null;	
+		FileInputStream fis=null;
+		
+		try {  
+            File file = new File(fileName);  
+            if(file.exists()) {  
+                fis = new FileInputStream(file);  
+                dos = new DataOutputStream(dataSocket.getOutputStream());  
+  
+                // 文件名和长度  
+                dos.writeUTF(file.getName());  
+                dos.flush();  
+                dos.writeLong(file.length());  
+                dos.flush();  
+  
+                // 开始传输文件  
+                System.out.println("======== 开始传输文件 ========");  
+                byte[] bytes = new byte[1024];  
+                int length = 0;  
+                long progress = 0;  
+                while((length = fis.read(bytes, 0, bytes.length)) != -1) {  
+                    dos.write(bytes, 0, length);  
+                    dos.flush();  
+                    progress += length;  
+                    System.out.print("| " + (100*progress/file.length()) + "% |");  
+                }  
+                System.out.println();  
+                System.out.println("======== 文件传输成功 ========");  
+            }  
+        } catch (Exception e) {  
+            e.printStackTrace();  
+        } finally {  
+            if(fis != null)  
+                fis.close();  
+            if(dos != null)  
+                dos.close();  
+            dataSocket.close();  
+        }  
 	}
+	public void receiveFile() throws IOException, InterruptedException {
+			writer.println("150 Opening data connection");
+			writer.flush();
+			byte[] inputByte = null;  
+
+	        DataInputStream dis = null;  
+	        FileOutputStream fos = null;  
+	        
+	        try {  
+                dis = new DataInputStream(dataSocket.getInputStream());  
+  
+                // 文件名和长度  
+                String fileName = dis.readUTF();  
+                long fileLength = dis.readLong();  
+                File directory = new File(filePath);  
+                if(!directory.exists()) {  
+                    directory.mkdir();  
+                }  
+                File file = new File(directory.getAbsolutePath() + File.separatorChar + fileName);  
+                fos = new FileOutputStream(file);  
+  
+                // 开始接收文件  
+                byte[] bytes = new byte[1024];  
+                int length = 0;  
+                while((length = dis.read(bytes, 0, bytes.length)) != -1) {  
+                    fos.write(bytes, 0, length);  
+                    fos.flush();  
+                }  
+                System.out.println("======== 文件接收成功 [File Name：" + fileName + "] [Size：" + getFormatFileSize(fileLength) + "] ========");  
+            } catch (Exception e) {  
+                e.printStackTrace();  
+            } finally {  
+                try {  
+                    if(fos != null)  
+                        fos.close();  
+                    if(dis != null)  
+                        dis.close();  
+                    dataSocket.close();  
+                } catch (Exception e) {}  
+            }  
+        }  
+		private String getFormatFileSize(long length) {  
+		    double size = ((double) length) / (1 << 30);  
+		    if(size >= 1) {  
+		        return df.format(size) + "GB";  
+		    }  
+		    size = ((double) length) / (1 << 20);  
+		    if(size >= 1) {  
+		        return df.format(size) + "MB";  
+		    }  
+		    size = ((double) length) / (1 << 10);  
+		    if(size >= 1) {  
+		        return df.format(size) + "KB";  
+		    }  
+		    return length + "B";  
+		}  
 	/*writer.println("USER root");
 	writer.flush();
 	response=reader.readLine();

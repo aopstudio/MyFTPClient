@@ -10,7 +10,7 @@ import java.net.UnknownHostException;
 import java.util.StringTokenizer;
 
 public class Main {
-	public static void main(String[] args) throws UnknownHostException, IOException {
+	public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
 		Client cli=new Client();
 		cli.sendCommand();
 	}

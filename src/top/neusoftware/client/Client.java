@@ -26,7 +26,7 @@ public class Client {
 	PrintWriter writer;
 	String response;
 	String command;
-	String filePath="F:/";//默认工作空间是F盘
+	String filePath="E:/";//默认工作空间是E盘
 	private static DecimalFormat df = null;
 	static {  
         // 设置数字格式，保留一位有效小数  
@@ -75,20 +75,40 @@ public class Client {
 			else if(command.startsWith("LIST")) {
 				writer.println(command);
 				writer.flush();
-				while((response=reader.readLine())!="EOF") {
-					System.out.println(response);
-				}
-			}
-			else if(command.startsWith("STOR")) {
-				writer.println(command);
-				writer.flush();
 				response=reader.readLine();
 				System.out.println(response);
-				if(response.startsWith("150")) {
-					sendFile(command.substring(5));
-				}
+				if(response.startsWith("150"))
+					while(!(response=reader.readLine()).equals("EOF")) {
+						System.out.println(response);
+					}
 			}
-			else if(command.startsWith("RETR")) {
+			else if(command.startsWith("STOR")) {
+				if(command.length()>5) {
+					File file1=new File(filePath+command.substring(5));//当前工作目录下路径
+					File file2=new File(command.substring(5));//全局路径
+					if(file1.exists()) {
+						writer.println(command);
+						writer.flush();
+						response=reader.readLine();
+						System.out.println(response);
+						if(response.startsWith("150")) {
+							sendFile(filePath+command.substring(5));
+						}
+					}
+					else if(file2.exists()) {
+						writer.println(command);
+						writer.flush();
+						response=reader.readLine();
+						System.out.println(response);
+						if(response.startsWith("150")) {
+							sendFile(command.substring(5));
+						}
+					}
+				}
+				else
+					System.out.println("501 syntax error");
+			}
+			else if(command.startsWith("RETR")) {			
 				writer.println(command);
 				writer.flush();
 				response=reader.readLine();
@@ -113,15 +133,16 @@ public class Client {
 		FileInputStream fis=null;
 		
 		try {  
-            File file = new File(fileName);  
-            if(file.exists()) {  
-                fis = new FileInputStream(file);  
+            File file1 = new File(filePath+fileName);//在当前工作路径寻找
+            File file2=new File(fileName);//全局寻找
+            if(file1.exists()) {  
+                fis = new FileInputStream(file1);  
                 dos = new DataOutputStream(dataSocket.getOutputStream());  
   
                 // 文件名和长度  
-                dos.writeUTF(file.getName());  
+                dos.writeUTF(file1.getName());  
                 dos.flush();  
-                dos.writeLong(file.length());  
+                dos.writeLong(file1.length());  
                 dos.flush();  
   
                 // 开始传输文件  
@@ -133,11 +154,35 @@ public class Client {
                     dos.write(bytes, 0, length);  
                     dos.flush();  
                     progress += length;  
-                    System.out.print("| " + (100*progress/file.length()) + "% |");  
+                    System.out.print("| " + (100*progress/file1.length()) + "% |");  
                 }  
                 System.out.println();  
                 System.out.println("======== 文件传输成功 ========");  
             }  
+            else if(file2.exists()) {  
+                fis = new FileInputStream(file2);  
+                dos = new DataOutputStream(dataSocket.getOutputStream());  
+  
+                // 文件名和长度  
+                dos.writeUTF(file2.getName());  
+                dos.flush();  
+                dos.writeLong(file2.length());  
+                dos.flush();  
+  
+                // 开始传输文件  
+                System.out.println("======== 开始传输文件 ========");  
+                byte[] bytes = new byte[1024];  
+                int length = 0;  
+                long progress = 0;  
+                while((length = fis.read(bytes, 0, bytes.length)) != -1) {  
+                    dos.write(bytes, 0, length);  
+                    dos.flush();  
+                    progress += length;  
+                    System.out.print("| " + (100*progress/file2.length()) + "% |");  
+                }  
+                System.out.println();  
+                System.out.println("======== 文件传输成功 ========");  
+            }
         } catch (Exception e) {  
             e.printStackTrace();  
         } finally {  
@@ -149,8 +194,7 @@ public class Client {
         }  
 	}
 	public void receiveFile() throws IOException, InterruptedException {
-			writer.println("150 Opening data connection");
-			writer.flush();
+			
 			byte[] inputByte = null;  
 
 	        DataInputStream dis = null;  
